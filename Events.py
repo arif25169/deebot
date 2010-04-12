@@ -44,7 +44,7 @@ class MessageEvent(Events.MessageEvent):
 			# If the command exists, run the function.
 			plugin_name = bot.findPluginFromTrigger(trigger)
 			if plugin_name:
-				plugin = bot.plugins[plugin_name]["instance"]
+				plugin = bot.getPlugin(plugin_name)
 				plugin.runCommand(bot, trigger, nick, target, message[trigger_end+1:])
 				
 				if bot.debug:
@@ -52,10 +52,10 @@ class MessageEvent(Events.MessageEvent):
 		else:
 			# Run commands which do not rely on an actual trigger.
 			for plugin_name in bot.plugins:
-				plugin = bot.plugins[plugin_name]["instance"]
+				plugin = bot.getPlugin(plugin_name)
 				
 				if plugin.hasCommand("*"):
-					plugin.runCommand(bot, trigger, nick, target, message)
+					plugin.runCommand(bot, "*", nick, target, message)
 					
 					if bot.debug:
 						bot.log("Command(" + plugin + ":*): (" + nick + ", " + target + ", " + message +")")

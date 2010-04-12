@@ -42,8 +42,8 @@ class DeeBot(DeeIRC.IRC.DeeIRC):
 		# Config
 		self.config = {}
 		self.config["server"] = "irc.synirc.org"
-		self.config["channels"] = ["#glasnost"]
-		self.config["command_prefix"] = "!" 
+		self.config["channels"] = ["#glasnost", "#underwares"]
+		self.config["command_prefix"] = "?" 
 		self.config["admins"] = ["Knifa"]
 		
 		# Add events.
@@ -77,7 +77,7 @@ class DeeBot(DeeIRC.IRC.DeeIRC):
 			plugin_module = __import__(import_path, globals(), locals(), plugin_name)
 			
 			# Get the instance of the plugin and load it.
-			plugin = plugin_module.GetPluginInstance()
+			plugin = plugin_module.getPluginInstance()
 			plugin.load(self)
 			
 			# Add it into the dictionary.
@@ -88,8 +88,8 @@ class DeeBot(DeeIRC.IRC.DeeIRC):
 
 			# Log it.
 			self.log("Loaded plugin(" + plugin_name + ")")
-		except:
-			self.error("Failed to load plugin(" + plugin_name + ")")
+		except Exception, e:
+			self.error("Failed to load plugin(" + plugin_name + "): " + str(e))
 			raise # pass so calling function can manage it.
 		
 	def reloadPlugin(self, plugin_name):
@@ -107,7 +107,7 @@ class DeeBot(DeeIRC.IRC.DeeIRC):
 		# Make sure the plugin exists first.
 		if self.hasPlugin(plugin_name):		
 			# Run the unload method.
-			self.plugins[plugin_name]["instance"].unload(self)
+			self.getPlugin(plugin_name).unload(self)
 		
 			# Delete the plugin and log a message.
 			del self.plugins[plugin_name]
@@ -119,6 +119,13 @@ class DeeBot(DeeIRC.IRC.DeeIRC):
 			return True
 		else:
 			return False
+	
+	def getPlugin(self, plugin_name):
+		"""Returns a plugin instance."""
+		if plugin_name in self.plugins:
+			return self.plugins[plugin_name]["module"].getPluginInstance()
+		else:
+			return None
 			
 	# ------ Command helpers ---------------------------------------------------
 	
@@ -128,7 +135,7 @@ class DeeBot(DeeIRC.IRC.DeeIRC):
 		
 		# Loop through all plugins.
 		for plugin_name in self.plugins:
-			plugin = self.plugins[plugin_name]["instance"]
+			plugin = self.getPlugin(plugin_name)
 			
 			# Check if the plugin has that trigger.
 			if plugin.hasCommand(trigger):

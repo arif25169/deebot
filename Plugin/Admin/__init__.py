@@ -25,6 +25,9 @@ class AdminPlugin(Plugin.Plugin):
 		self.addCommand("unload", self.commandPluginUnload)
 		self.addCommand("reload", self.commandPluginReload)
 		
+		self.addCommand("join", self.commandJoin)
+		self.addCommand("part", self.commandPart)
+		
 		self.addCommand("exec", self.commandExec)
 		self.addCommand("eval", self.commandEval)
 		
@@ -46,6 +49,7 @@ class AdminPlugin(Plugin.Plugin):
 		"""Unload a plugin."""
 		if bot.isAdmin(nick):
 			bot.unloadPlugin(message)
+			bot.sendMessage(target, "Unloaded plugin.")
 		
 	def commandPluginReload(self, bot, nick, target, message):
 		"""Reloads a plugin. If the plugin name is sent as "all", loop through
@@ -54,9 +58,24 @@ class AdminPlugin(Plugin.Plugin):
 			if message == "all":
 				for plugin_name in bot.plugins:
 					bot.reloadPlugin(plugin_name)
+					
+				bot.sendMessage(target, "Reloaded all plugins.")
 			else:
 				bot.reloadPlugin(message)
+				bot.sendMessage(target, "Reloaded plugins.")
 	
+	# --------------------------------------------------------------------------
+	
+	def commandJoin(self, bot, nick, target, message):
+		"""Causes the bot to join a channel."""
+		if bot.isAdmin(nick):
+			bot.sendJoin(message)
+		
+	def commandPart(self, bot, nick, target, message):
+		"""Causes the bot to leave a channel."""
+		if bot.isAdmin(nick):
+			bot.sendPart(message)
+		
 	# --------------------------------------------------------------------------
 	
 	def commandExec(self, bot, nick, target, message):
@@ -86,5 +105,11 @@ class AdminPlugin(Plugin.Plugin):
 		
 # ------------------------------------------------------------------------------
 
-def GetPluginInstance():
-	return AdminPlugin()
+__plugin_instance = None
+def getPluginInstance():
+	global __plugin_instance
+	
+	if not __plugin_instance:
+		__plugin_instance = AdminPlugin()
+		
+	return __plugin_instance
