@@ -12,7 +12,7 @@
 #
 # You should have received a copy of the GNU General Public License
 	
-class Plugin():
+class Plugin(object):
 	"""Plugin Base Class for DeeBot"""
 	
 	def __init__(self):
