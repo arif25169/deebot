@@ -17,14 +17,19 @@
 #	DeeBot.plugins = {
 #		"[plugin_name]":{
 #			"module":[module_object], 
-#			"commands":{
-#				"[trigger]":[command_function]
-#			}		
+#			"instance":[instance_object],
 #		}
 #	}
 
-import DeeIRC.IRC
 import threading
+
+import DeeIRC
+import DeeIRC.Utils as Utils
+
+import Plugin
+import Events
+
+# ------------------------------------------------------------------------------
 
 class DeeBot(DeeIRC.IRC.DeeIRC):
 	"""DeeBot!"""
@@ -42,9 +47,9 @@ class DeeBot(DeeIRC.IRC.DeeIRC):
 		self.config["admins"] = ["Knifa"]
 		
 		# Add events.
-		self.addEvent("connected", DeeBot.eventConnected_JoinChannels)
-		self.addEvent("message", DeeBot.eventMessage_RunCommands)
-		self.addEvent("disconnected", DeeBot.eventDisconnected)
+		self.addEvent("connected", Events.ConnectedEvent())
+		self.addEvent("disconnected", Events.DisconnectedEvent())
+		self.addEvent("message", Events.MessageEvent())
 			
 		# Plugin modules are loaded into the plugin dictionary, with the key
 		# being the name of the module.
@@ -52,15 +57,8 @@ class DeeBot(DeeIRC.IRC.DeeIRC):
 		
 		# Load base plugins.
 		self.loadPlugin("Admin")
-		if self.debug:
-			self.loadPlugin("Debug")
-		
-		# Run the main loop in a thread, because that is cool.
-		self.loop_thread = threading.Thread(target=self.run)
-		self.loop_thread.start()
-		self.loop_running = True
 	
-	# ------ Loop
+	# ------ Loop --------------------------------------------------------------
 	
 	def run(self):
 		"""Runs continously in it's own thread, calling plugin think functions.
@@ -68,40 +66,26 @@ class DeeBot(DeeIRC.IRC.DeeIRC):
 		
 		Neccessary for timers, etc."""
 		self.connect(self.config["server"])
-		self.loop_running = True
-		
-		while self.loop_running == True:
-			# Lock the thread so we can loop through the plugins.	
-			lock = threading.Lock()
-			lock.acquire()
 			
-			# Loop through the plugins and call their loop function.
-			for plugin in self.plugins:
-				if self.plugins.has_key(plugin):
-					plugin_module = self.plugins[plugin]["module"]
-							
-					# If they have one.
-					if "pluginLoop" in dir(plugin_module):
-						plugin_module.pluginLoop(self)
-			
-			# Release the lock.			
-			lock.release()
-			
-	# ------ Plugin helpers
+	# ------ Plugin helpers ----------------------------------------------------
 	
 	def loadPlugin(self, plugin_name):
 		"""Loads a plugin"""
 		try:
-			# Get the full import string.
-			plugin_import = "Plugins." + plugin_name
+			# Get the full import string and import the module
+			import_path = "Plugin." + plugin_name
+			plugin_module = __import__(import_path, globals(), locals(), plugin_name)
 			
-			# Try load the plugin into the dictionary.
-			self.plugins[plugin_name] = {"module":__import__(plugin_import, globals(), 
-				locals(), plugin_name), "commands":{}}
-				
-			# Run the initalization command.
-			self.plugins[plugin_name]["module"].pluginLoad(self)
-		
+			# Get the instance of the plugin and load it.
+			plugin = plugin_module.GetPluginInstance()
+			plugin.load(self)
+			
+			# Add it into the dictionary.
+			self.plugins[plugin_name] = {
+				"module":plugin_module,
+				"instance":plugin,
+			}				
+
 			# Log it.
 			self.log("Loaded plugin(" + plugin_name + ")")
 		except:
@@ -111,8 +95,10 @@ class DeeBot(DeeIRC.IRC.DeeIRC):
 	def reloadPlugin(self, plugin_name):
 		"""Reloads a plugin"""
 		if self.hasPlugin(plugin_name):
-			# Basically just unloads and reloads them.
+			# Reload the actual module file.
 			reload(self.plugins[plugin_name]["module"])
+			
+			# Run the unload/load functions on it.
 			self.unloadPlugin(plugin_name)
 			self.loadPlugin(plugin_name)
 			
@@ -120,49 +106,38 @@ class DeeBot(DeeIRC.IRC.DeeIRC):
 		"""Unloads a plugin."""
 		# Make sure the plugin exists first.
 		if self.hasPlugin(plugin_name):		
+			# Run the unload method.
+			self.plugins[plugin_name]["instance"].unload(self)
+		
 			# Delete the plugin and log a message.
 			del self.plugins[plugin_name]
 			self.log("Unloaded plugin(" + plugin_name + ")")
 	
 	def hasPlugin(self, plugin_name):
 		"""Returns true if a plugin is loaded, otherwise false"""
-		if self.plugins.has_key(plugin_name):
+		if plugin_name in self.plugins:
 			return True
 		else:
 			return False
 			
-	# ------ Command helpers
+	# ------ Command helpers ---------------------------------------------------
 	
-	def addCommand(self, plugin_name, trigger, function):
-		"""Adds a command to the command dictionary."""
-		trigger = trigger.lower()
-			
-		self.plugins[plugin_name]["commands"][trigger] = function
-		self.log("Added command(" + plugin_name +":" + trigger + "): " + str(function))
-		
-	def removeCommand(self, trigger):
-		"""Removes a command."""
-		trigger = trigger.lower()
-		
-		plugin = self.findPluginFromTrigger(trigger)
-		if plugin:
-			del self.plugins[plugin][trigger]
-			self.log("Removed command(" + trigger + ")")
-	
-	def findPluginFromTrigger(self, trigger_find):
+	def findPluginFromTrigger(self, trigger):
 		"""Returns the plugin name if a command exists, otherwise none"""
-		trigger_find = trigger_find.lower()
+		trigger = trigger.lower() # lowercase!
 		
+		# Loop through all plugins.
 		for plugin_name in self.plugins:
-			plugin = self.plugins[plugin_name]
+			plugin = self.plugins[plugin_name]["instance"]
 			
-			for trigger in plugin["commands"]:
-				if trigger == trigger_find:
-					return plugin_name
+			# Check if the plugin has that trigger.
+			if plugin.hasCommand(trigger):
+				return plugin_name
 		
+		# Not found :(
 		return None
 			
-	# ------ User helpers
+	# ------ User helpers ------------------------------------------------------
 	
 	def isAdmin(self, nick):
 		"""Returns if a user is an admin or not"""
@@ -171,46 +146,7 @@ class DeeBot(DeeIRC.IRC.DeeIRC):
 		else:
 			return False
 			
-	# ------ Events
-	
-	def eventConnected_JoinChannels(self):
-		"""Joins the configured channels on connect."""
-		for channel in self.config["channels"]:
-			self.sendJoin(channel)
-			
-	def eventMessage_RunCommands(self, nick, target, message):
-		"""Checks if a command has been said and run it if so."""
-		if message[0] == self.config["command_prefix"]:
-			# Get the command from the message.
-			trigger_end = message.find(" ")
-			if not trigger_end >= 0:
-				# No parameters.
-				trigger_end = len(message)
-			trigger = message[1:trigger_end].lower()
-
-			# If the command exists, run the function.
-			plugin = self.findPluginFromTrigger(trigger)
-			if plugin:
-				self.plugins[plugin]["commands"][trigger](self, nick, target, message[trigger_end+1:])
-				
-				if self.debug:
-					self.log("Command(" + plugin + ":" + trigger + "): " + str(self.plugins[plugin]["commands"][trigger]))
-		else:
-			# Run commands which do not rely on an actual trigger.
-			for plugin in self.plugins:
-				plugin_dict = self.plugins[plugin]
-				
-				if "*" in plugin_dict["commands"]:
-					plugin_dict["commands"]["*"](self, nick, target, message)
-					
-					if self.debug:
-						self.log("Command(" + plugin + ":*): " + str(plugin_dict["commands"]["*"]))
-						
-	def eventDisconnected(self):
-		"""Kills the main thread when we disconnect."""
-		self.loop_running = False
-			
-	# ------ Error Messages and Logging
+	# ------ Error Messages and Logging ----------------------------------------
 	
 	def error(self, message, **args):
 		"""Prints errors to console or channel. Overrides default one.
@@ -218,16 +154,19 @@ class DeeBot(DeeIRC.IRC.DeeIRC):
 		args:
 			target: Channel/user to output to.
 			console: Boolean saying if we should output to console or not."""
-		error_message = self.boldCode() + "Error: " + self.normalCode() + message
+		error_message = Utils.boldCode() + "Error: " + Utils.normalCode() + message
 		
 		if args.has_key("target"):
 			self.sendMessage(args["target"], error_message)
 			
 		if args.has_key("console"):
 			if args["console"]:
-				print self.errorTime(), "<ERROR>", self.stripCodes(message)
+				print self.errorTime(), "<ERROR>", Utils.stripCodes(message)
 		else:
-			print self.errorTime(), "<ERROR>", self.stripCodes(message)
-	
+			print self.errorTime(), "<ERROR>", Utils.stripCodes(message)
+			
+# ------------------------------------------------------------------------------
+
 if __name__ == "__main__":
 	bot = DeeBot()
+	bot.run()
