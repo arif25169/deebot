@@ -22,11 +22,6 @@ class ConnectedEvent(Events.ConnectedEvent):
 		"""Joins the configured channels on connect."""
 		for channel in bot.config["channels"]:
 			bot.sendJoin(channel)
-			
-class DisconnectedEvent(Events.DisconnectedEvent):				
-	def fire(self, bot):
-		"""Kills the main thread when we disconnect."""
-		bot.loop_running = False
 
 # ------------------------------------------------------------------------------
 

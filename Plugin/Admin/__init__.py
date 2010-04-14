@@ -62,7 +62,7 @@ class AdminPlugin(Plugin.Plugin):
 				bot.sendMessage(target, "Reloaded all plugins.")
 			else:
 				bot.reloadPlugin(message)
-				bot.sendMessage(target, "Reloaded plugins.")
+				bot.sendMessage(target, "Reloaded plugin.")
 	
 	# --------------------------------------------------------------------------
 	
