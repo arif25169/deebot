@@ -36,7 +36,7 @@ class DeeBot(DeeIRC.IRC.DeeIRC):
 	
 	def __init__(self):
 		"""Constructor"""
-		self.debug = True # set debug before calling init
+		self.debug = False # set debug before calling init
 		super(DeeBot, self).__init__("DeeBot")
 		
 		# Config
@@ -45,18 +45,19 @@ class DeeBot(DeeIRC.IRC.DeeIRC):
 		self.config["channels"] = ["#glasnost", "#underwares"]
 		self.config["command_prefix"] = "?" 
 		self.config["admins"] = ["Knifa"]
+		self.config["plugins"] = ["Admin", "Uno"]
 		
 		# Add events.
 		self.addEvent("connected", Events.ConnectedEvent())
-		self.addEvent("disconnected", Events.DisconnectedEvent())
 		self.addEvent("message", Events.MessageEvent())
 			
 		# Plugin modules are loaded into the plugin dictionary, with the key
 		# being the name of the module.
 		self.plugins = {}
 		
-		# Load base plugins.
-		self.loadPlugin("Admin")
+		# Load plugins.
+		for plugin in self.config["plugins"]:
+			self.loadPlugin(plugin)
 	
 	# ------ Loop --------------------------------------------------------------
 	
@@ -104,7 +105,6 @@ class DeeBot(DeeIRC.IRC.DeeIRC):
 			
 	def unloadPlugin(self, plugin_name):
 		"""Unloads a plugin."""
-		# Make sure the plugin exists first.
 		if self.hasPlugin(plugin_name):		
 			# Run the unload method.
 			self.getPlugin(plugin_name).unload(self)
@@ -175,5 +175,9 @@ class DeeBot(DeeIRC.IRC.DeeIRC):
 # ------------------------------------------------------------------------------
 
 if __name__ == "__main__":
+	print "DeeBot (SVN)"
+	print "--- Now with additional butts."
+	print
+	
 	bot = DeeBot()
 	bot.run()
